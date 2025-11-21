@@ -3,33 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <title>SISTEMA DE TRANSMISIÓN</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="transmitir-styles.css" />
 </head>
 
 <body>
+
   <header>
     <h1>SISTEMA DE TRANSMISIÓN</h1>
   </header>
 
   <div class="container">
+
+    <!-- INPUT DEL CÓDIGO -->
     <div class="info-card">
-      <div>Ingrese código</div>
-      <input id="codigoInput" type="text"  />
+      <label>Ingrese código</label>
+      <input id="codigoInput" type="text" placeholder="Ej: S01" />
     </div>
 
-    <video id="localVideo" autoplay playsinline muted></video>
+    <!-- 🎥 AREA DEL VIDEO (ahora sí existe) -->
+    <div class="video-area">
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
 
+    <!-- ESTADO -->
     <div class="status">
       Estado: <span id="estadoText">Listo para transmitir</span>
     </div>
 
+    <!-- BOTÓN -->
     <button class="btn btn-primary" id="btnToggle">Iniciar transmisión</button>
+
   </div>
 
   <!-- SOCKET.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
+  <!-- SCRIPT PRINCIPAL -->
   <script>
     const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
 
@@ -46,21 +56,17 @@
 
     function setEstado(msg) {
       estadoText.textContent = msg;
-      console.log(msg);
     }
 
     async function startTransmission() {
       roomId = document.getElementById("codigoInput").value.trim().toUpperCase();
-      if (!roomId) return alert("Ingresa un código para la transmisión");
+      if (!roomId) return alert("Ingresa un código");
 
       try {
-        setEstado("Permisos de cámara...");
+        setEstado("Activando cámara...");
 
-        // ⭐ UNIVERSAL (iOS + Android) — pedir SOLO cámara primero
         localStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" }
-          },
+          video: { facingMode: "environment" },
           audio: false
         });
 
@@ -69,12 +75,11 @@
         socket = io(SIGNALING_URL, { transports: ["websocket"] });
 
         socket.on("connect", () => {
-          setEstado("Conectado al servidor.");
+          setEstado("Conectado al servidor");
           socket.emit("join-room", { roomId, role: "sender" });
         });
 
         pc = new RTCPeerConnection(pcConfig);
-
         localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
         pc.onicecandidate = (e) => {
@@ -92,21 +97,10 @@
         });
 
         setEstado("Creando oferta...");
-
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
         socket.emit("offer", { roomId, offer });
-
-        // ⭐ Después de conectar, pedir audio (iOS lo permite después)
-        setTimeout(async () => {
-          try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioStream.getTracks().forEach(t => pc.addTrack(t, audioStream));
-          } catch (e) {
-            console.warn("Audio no permitido aún, pero video sí funciona.");
-          }
-        }, 1500);
 
         transmitting = true;
         btnToggle.textContent = "Detener transmisión";
@@ -114,9 +108,10 @@
         btnToggle.classList.add("btn-danger");
 
         setEstado("Esperando visor...");
+
       } catch (err) {
         console.error(err);
-        setEstado("Error iniciando cámara.");
+        setEstado("Error al activar cámara");
       }
     }
 
@@ -132,11 +127,11 @@
       btnToggle.classList.add("btn-primary");
       btnToggle.classList.remove("btn-danger");
 
-      setEstado("Transmisión detenida.");
+      setEstado("Transmisión detenida");
     }
 
-    btnToggle.onclick = () =>
-      transmitting ? stopTransmission() : startTransmission();
+    btnToggle.onclick = () => transmitting ? stopTransmission() : startTransmission();
   </script>
+
 </body>
 </html>
