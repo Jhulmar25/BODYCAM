@@ -1,64 +1,338 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<title>Transmisión – Sereno</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    text-align: center;
-  }
-  video {
-    width: 100%;
-    max-width: 380px;
-    border-radius: 12px;
-    background: #000;
-  }
-  button {
-    margin-top: 20px;
-    padding: 14px;
-    width: 90%;
-    border: none;
-    border-radius: 10px;
-    background: #007bff;
-    color: white;
-    font-size: 18px;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>BodyCam – Sereno</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0b0d13;
+      font-family: "Segoe UI", sans-serif;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      background: #11141c;
+      padding: 14px 20px;
+      text-align: center;
+      border-bottom: 2px solid #1f232d;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+    }
+
+    .container {
+      margin-top: 16px;
+      width: 100%;
+      max-width: 480px;
+      padding: 0 16px 20px;
+      box-sizing: border-box;
+    }
+
+    .info-card {
+      background: #151926;
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      color: #d2d7e5;
+    }
+
+    .label {
+      font-size: 13px;
+      color: #8e96aa;
+      margin-bottom: 4px;
+    }
+
+    .code {
+      font-weight: 600;
+      font-size: 16px;
+      color: #ffffff;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: black;
+      margin-top: 10px;
+      max-height: 320px;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #9fa7c0;
+    }
+
+    .status span {
+      font-weight: 600;
+    }
+
+    .btn {
+      margin-top: 16px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #2b82ff;
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(43, 130, 255, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+      box-shadow: 0 3px 10px rgba(43, 130, 255, 0.4);
+    }
+
+    .btn-danger {
+      background: #ff3b3b;
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(255, 59, 59, 0.4);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #1f2432;
+      margin-top: 4px;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff3b3b;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.2; }
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid #2b3345;
+      background: #10131f;
+      color: #e2e6f3;
+      font-size: 14px;
+      margin-top: 6px;
+      outline: none;
+    }
+
+    input::placeholder {
+      color: #5d6476;
+    }
+
+  </style>
 </head>
 
 <body>
-<h2>📡 Transmisión del Sereno</h2>
-<video id="localVideo" autoplay playsinline></video>
-<button id="btnStart">Iniciar transmisión</button>
+  <header>
+    <h1>BodyCam – Sereno</h1>
+  </header>
 
-<script>
-let pc;
-let localStream;
+  <div class="container">
+    <div class="info-card">
+      <div class="label">Código de Sereno</div>
+      <input id="codigoInput" type="text" placeholder="Ej: S01" />
+      <div class="pill" id="pillEstado" style="display:none;">
+        <div class="dot"></div>
+        <span id="textoEstadoPill">EN VIVO</span>
+      </div>
+    </div>
 
-document.getElementById("btnStart").onclick = async () => {
-  document.getElementById("btnStart").innerText = "Conectando...";
-  
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    <video id="localVideo" autoplay playsinline muted></video>
 
-  document.getElementById("localVideo").srcObject = localStream;
+    <div class="status" id="statusText">
+      Estado: <span>Listo para transmitir</span>
+    </div>
 
-  pc = new RTCPeerConnection();
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    <button class="btn btn-primary" id="btnToggle">
+      Iniciar transmisión
+    </button>
+  </div>
 
-  pc.onicecandidate = e => {
-    if (e.candidate) return;
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+          integrity="sha384-9Nsq9wy/ufj/cTd1J1Ki4CkSSjM5SIkn6No80lWoSQagtLlwCFWw6Dq3JnF9zfJk"
+          crossorigin="anonymous"></script>
 
-    const offer = btoa(JSON.stringify(pc.localDescription));
-    window.location.href = "ver.html#"+offer;
-  };
+  <script>
+    // ⬇️ CAMBIA ESTO POR LA URL REAL DE TU BACKEND NODE
+    const SIGNALING_URL = "https://TU-SERVIDOR-BODYCAM.com";
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-};
-</script>
+    const pcConfig = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    };
 
+    let socket = null;
+    let pc = null;
+    let localStream = null;
+    let roomId = null;
+    let transmitting = false;
+
+    const videoEl = document.getElementById("localVideo");
+    const btnToggle = document.getElementById("btnToggle");
+    const statusText = document.getElementById("statusText").querySelector("span");
+    const pillEstado = document.getElementById("pillEstado");
+    const textoEstadoPill = document.getElementById("textoEstadoPill");
+    const codigoInput = document.getElementById("codigoInput");
+
+    function setStatus(msg) {
+      statusText.textContent = msg;
+      console.log("STATUS:", msg);
+    }
+
+    function setPillLive(isLive) {
+      pillEstado.style.display = isLive ? "inline-flex" : "none";
+    }
+
+    async function startTransmission() {
+      roomId = (codigoInput.value || "").trim().toUpperCase();
+      if (!roomId) {
+        alert("Ingresa el código del sereno (Ej: S01)");
+        return;
+      }
+
+      try {
+        setStatus("Solicitando cámara y micrófono...");
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: true
+        });
+        videoEl.srcObject = localStream;
+
+        socket = io(SIGNALING_URL, { transports: ["websocket"] });
+
+        socket.on("connect", () => {
+          setStatus("Conectado al servidor de señalización.");
+          socket.emit("join-room", { roomId, role: "sender" });
+        });
+
+        socket.on("answer", async ({ answer }) => {
+          if (!pc) return;
+          setStatus("Respuesta recibida. Conectando...");
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        });
+
+        socket.on("ice-candidate", async ({ candidate }) => {
+          if (!pc || !candidate) return;
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (err) {
+            console.error("Error al agregar ICE candidate:", err);
+          }
+        });
+
+        socket.on("user-left", () => {
+          setStatus("El visor se desconectó.");
+        });
+
+        pc = new RTCPeerConnection(pcConfig);
+
+        localStream.getTracks().forEach((track) => {
+          pc.addTrack(track, localStream);
+        });
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate && socket) {
+            socket.emit("ice-candidate", {
+              roomId,
+              candidate: e.candidate
+            });
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          console.log("PC state:", pc.connectionState);
+          if (pc.connectionState === "connected") {
+            setStatus("Transmisión en vivo.");
+            setPillLive(true);
+          } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+            setStatus("Conexión perdida.");
+            setPillLive(false);
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        socket.emit("offer", { roomId, offer });
+
+        transmitting = true;
+        btnToggle.textContent = "Detener transmisión";
+        btnToggle.classList.remove("btn-primary");
+        btnToggle.classList.add("btn-danger");
+        setStatus("Enviando oferta. Esperando visor...");
+      } catch (err) {
+        console.error(err);
+        alert("Error al iniciar la transmisión: " + err.message);
+        setStatus("Error al iniciar.");
+      }
+    }
+
+    function stopTransmission() {
+      if (socket && roomId) {
+        socket.emit("leave-room", { roomId });
+        socket.disconnect();
+        socket = null;
+      }
+
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop());
+        localStream = null;
+        videoEl.srcObject = null;
+      }
+
+      transmitting = false;
+      btnToggle.textContent = "Iniciar transmisión";
+      btnToggle.classList.remove("btn-danger");
+      btnToggle.classList.add("btn-primary");
+      setStatus("Transmisión detenida.");
+      setPillLive(false);
+    }
+
+    btnToggle.addEventListener("click", () => {
+      if (!transmitting) {
+        startTransmission();
+      } else {
+        stopTransmission();
+      }
+    });
+
+  </script>
 </body>
 </html>
