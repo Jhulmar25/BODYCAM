@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>BodyCam – Panel Multivista</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="panel-styles.css" />
+  
+</head>
+
+<body>
+  <header>
+    <h1>BodyCam – Panel Multivista (4 transmisiones)</h1>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+
+      <!-- CARD 1 -->
+      <div class="card">
+        <div class="controls">
+          <input id="code1" placeholder="Código S01" />
+          <button onclick="connect(1)">Ver</button>
+          <button class="stop" onclick="disconnect(1)">X</button>
+        </div>
+        <video id="video1" autoplay playsinline></video>
+        <div class="estado" id="estado1">Esperando…</div>
+      </div>
+
+      <!-- CARD 2 -->
+      <div class="card">
+        <div class="controls">
+          <input id="code2" placeholder="Código S02" />
+          <button onclick="connect(2)">Ver</button>
+          <button class="stop" onclick="disconnect(2)">X</button>
+        </div>
+        <video id="video2" autoplay playsinline></video>
+        <div class="estado" id="estado2">Esperando…</div>
+      </div>
+
+      <!-- CARD 3 -->
+      <div class="card">
+        <div class="controls">
+          <input id="code3" placeholder="Código S03" />
+          <button onclick="connect(3)">Ver</button>
+          <button class="stop" onclick="disconnect(3)">X</button>
+        </div>
+        <video id="video3" autoplay playsinline></video>
+        <div class="estado" id="estado3">Esperando…</div>
+      </div>
+
+      <!-- CARD 4 -->
+      <div class="card">
+        <div class="controls">
+          <input id="code4" placeholder="Código S04" />
+          <button onclick="connect(4)">Ver</button>
+          <button class="stop" onclick="disconnect(4)">X</button>
+        </div>
+        <video id="video4" autoplay playsinline></video>
+        <div class="estado" id="estado4">Esperando…</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SOCKET.IO -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <script>
+    const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
+
+    const pcConfig = {
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    };
+
+    let sockets = {};
+    let pcs = {};
+
+    function setEstado(id, msg) {
+      document.getElementById(`estado${id}`).textContent = msg;
+    }
+
+    async function connect(id) {
+      const roomId = document.getElementById(`code${id}`).value.trim().toUpperCase();
+      if (!roomId) return alert("Ingresa código del sereno");
+
+      setEstado(id, "Conectando…");
+
+      sockets[id] = io(SIGNALING_URL, { transports: ["websocket"] });
+
+      sockets[id].on("connect", () => {
+        setEstado(id, "Esperando oferta…");
+        sockets[id].emit("join-room", { roomId, role: "viewer" });
+      });
+
+      sockets[id].on("offer", async ({ offer }) => {
+        setEstado(id, "Recibida oferta…");
+
+        pcs[id] = new RTCPeerConnection(pcConfig);
+
+        pcs[id].ontrack = (event) => {
+          document.getElementById(`video${id}`).srcObject = event.streams[0];
+          setEstado(id, "Transmitiendo EN VIVO");
+        };
+
+        pcs[id].onicecandidate = (e) => {
+          if (e.candidate) {
+            sockets[id].emit("ice-candidate", {
+              roomId,
+              candidate: e.candidate
+            });
+          }
+        };
+
+        await pcs[id].setRemoteDescription(new RTCSessionDescription(offer));
+
+        const answer = await pcs[id].createAnswer();
+        await pcs[id].setLocalDescription(answer);
+
+        sockets[id].emit("answer", { roomId, answer });
+      });
+
+      sockets[id].on("ice-candidate", async ({ candidate }) => {
+        candidate && pcs[id].addIceCandidate(new RTCIceCandidate(candidate));
+      });
+    }
+
+    function disconnect(id) {
+      sockets[id] && sockets[id].disconnect();
+      pcs[id] && pcs[id].close();
+
+      document.getElementById(`video${id}`).srcObject = null;
+      setEstado(id, "Desconectado.");
+
+      delete sockets[id];
+      delete pcs[id];
+    }
+  </script>
+</body>
+</html>
