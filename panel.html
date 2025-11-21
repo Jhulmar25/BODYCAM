@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>BodyCam – Panel Supervisor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #050711;
+      font-family: "Segoe UI", sans-serif;
+      color: #f4f5fb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      background: #0d0f1c;
+      padding: 16px 20px;
+      border-bottom: 1px solid #202336;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #1f2538;
+      color: #9da4c0;
+    }
+
+    .container {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 900px;
+      padding: 0 16px 24px;
+      box-sizing: border-box;
+    }
+
+    .card {
+      background: #101325;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid #2e3550;
+      background: #070a16;
+      color: #e2e6ff;
+      outline: none;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    input::placeholder {
+      color: #5d6582;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2b82ff;
+      color: white;
+      white-space: nowrap;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: black;
+      margin-top: 10px;
+      max-height: 480px;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #a2aac8;
+    }
+
+    .pill-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #171d32;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .dot-live {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff3b3b;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.2; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>BodyCam – Panel de Supervisión</h1>
+    <div class="badge">Versión demo Node + WebSockets</div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <div class="controls">
+        <input id="codigoSereno" type="text" placeholder="Código de sereno (Ej: S01)" />
+        <button id="btnConectar">Ver transmisión</button>
+        <button id="btnDesconectar" disabled>Detener</button>
+      </div>
+
+      <video id="remoteVideo" autoplay playsinline></video>
+
+      <div class="status">
+        Estado: <span id="estadoTexto">Esperando conexión...</span>
+        <span id="pillLive" class="pill-live" style="display:none;">
+          <span class="dot-live"></span> EN VIVO
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+          integrity="sha384-9Nsq9wy/ufj/cTd1J1Ki4CkSSjM5SIkn6No80lWoSQagtLlwCFWw6Dq3JnF9zfJk"
+          crossorigin="anonymous"></script>
+
+  <script>
+    // ⬇️ MISMA URL QUE EN transmitir.html
+    const SIGNALING_URL = "https://TU-SERVIDOR-BODYCAM.com";
+
+    const pcConfig = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    };
+
+    let socket = null;
+    let pc = null;
+    let roomId = null;
+
+    const remoteVideo = document.getElementById("remoteVideo");
+    const estadoTexto = document.getElementById("estadoTexto");
+    const pillLive = document.getElementById("pillLive");
+    const codigoInput = document.getElementById("codigoSereno");
+    const btnConectar = document.getElementById("btnConectar");
+    const btnDesconectar = document.getElementById("btnDesconectar");
+
+    function setEstado(msg) {
+      estadoTexto.textContent = msg;
+      console.log("PANEL STATUS:", msg);
+    }
+
+    function setLive(isLive) {
+      pillLive.style.display = isLive ? "inline-flex" : "none";
+    }
+
+    function resetConnection() {
+      if (socket && roomId) {
+        socket.emit("leave-room", { roomId });
+        socket.disconnect();
+        socket = null;
+      }
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      remoteVideo.srcObject = null;
+      setLive(false);
+      setEstado("Conexión detenida.");
+      btnConectar.disabled = false;
+      btnDesconectar.disabled = true;
+    }
+
+    async function connectAsViewer() {
+      roomId = (codigoInput.value || "").trim().toUpperCase();
+      if (!roomId) {
+        alert("Ingresa el código del sereno (Ej: S01)");
+        return;
+      }
+
+      setEstado("Conectando al servidor de señalización...");
+
+      socket = io(SIGNALING_URL, { transports: ["websocket"] });
+
+      socket.on("connect", () => {
+        setEstado("Conectado. Esperando oferta de " + roomId + "...");
+        socket.emit("join-room", { roomId, role: "viewer" });
+      });
+
+      socket.on("offer", async ({ offer }) => {
+        setEstado("Oferta recibida. Creando respuesta...");
+
+        pc = new RTCPeerConnection(pcConfig);
+
+        pc.ontrack = (event) => {
+          const [stream] = event.streams;
+          remoteVideo.srcObject = stream;
+          setEstado("Transmisión en vivo.");
+          setLive(true);
+        };
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate && socket) {
+            socket.emit("ice-candidate", {
+              roomId,
+              candidate: e.candidate
+            });
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          console.log("PC viewer state:", pc.connectionState);
+          if (pc.connectionState === "connected") {
+            setEstado("Conectado al sereno " + roomId);
+            setLive(true);
+          } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+            setEstado("Conexión perdida.");
+            setLive(false);
+          }
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        socket.emit("answer", { roomId, answer });
+        setEstado("Respuesta enviada. Estableciendo conexión...");
+      });
+
+      socket.on("ice-candidate", async ({ candidate }) => {
+        if (!pc || !candidate) return;
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error("Error al agregar ICE candidate en visor:", err);
+        }
+      });
+
+      socket.on("user-left", () => {
+        setEstado("El sereno se desconectó.");
+        setLive(false);
+      });
+
+      btnConectar.disabled = true;
+      btnDesconectar.disabled = false;
+    }
+
+    btnConectar.addEventListener("click", connectAsViewer);
+    btnDesconectar.addEventListener("click", resetConnection);
+
+    window.addEventListener("beforeunload", () => {
+      resetConnection();
+    });
+  </script>
+</body>
+</html>
