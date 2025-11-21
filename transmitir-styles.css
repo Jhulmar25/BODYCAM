@@ -1,79 +1,175 @@
- 
-    body {
-      margin: 0;
-      padding: 0;
-      background: #0b0d13;
-      font-family: "Segoe UI", sans-serif;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100vh;
-    }
+/* ---------------------------------------------------------
+   ESTILOS GENERALES
+--------------------------------------------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-    header {
-      width: 100%;
-      background: #11141c;
-      padding: 14px 20px;
-      text-align: center;
-      border-bottom: 2px solid #1f232d;
-    }
+body {
+  background: #f4f5f7;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #1f2532;
+  padding: 0;
+  margin: 0;
 
-    header h1 {
-      margin: 0;
-      font-size: 18px;
-      letter-spacing: 0.5px;
-    }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-    .container {
-      margin-top: 16px;
-      width: 100%;
-      max-width: 480px;
-      padding: 0 16px 20px;
-      box-sizing: border-box;
-    }
+/* ---------------------------------------------------------
+   HEADER
+--------------------------------------------------------- */
+header {
+  width: 100%;
+  background: #ffffff;
+  padding: 18px 0;
+  text-align: center;
+  border-bottom: 1px solid #e2e2e2;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
 
-    .info-card {
-      background: #151926;
-      padding: 12px 14px;
-      border-radius: 12px;
-      margin-bottom: 14px;
-      font-size: 14px;
-      color: #d2d7e5;
-    }
+header h1 {
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: 700;
+  color: #222;
+  letter-spacing: 0.5px;
+}
 
-    video {
-      width: 100%;
-      border-radius: 12px;
-      background: black;
-      margin-top: 10px;
-      max-height: 320px;
-    }
+/* ---------------------------------------------------------
+   CONTENEDOR PRINCIPAL
+--------------------------------------------------------- */
+.container {
+  width: 92%;
+  max-width: 450px;
+  margin-top: 18px;
+  padding: 20px;
+  background: white;
 
-    .status {
-      margin-top: 8px;
-      font-size: 13px;
-      color: #9fa7c0;
-    }
+  border-radius: 18px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.08);
 
-    .btn {
-      margin-top: 16px;
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 999px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
 
-    .btn-primary {
-      background: #2b82ff;
-      color: white;
-    }
+/* ---------------------------------------------------------
+   TARJETA DE INPUT
+--------------------------------------------------------- */
+.info-card {
+  width: 100%;
+  background: #f7f8fa;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid #e3e5e8;
 
-    .btn-danger {
-      background: #ff3b3b;
-      color: white;
-    }
-  
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+.info-card input {
+  width: 100%;
+  padding: 14px;
+  font-size: 17px;
+  border-radius: 12px;
+
+  border: 1px solid #d0d2d6;
+  outline: none;
+  background: white;
+  transition: 0.2s;
+}
+
+.info-card input:focus {
+  border-color: #4c82ff;
+  box-shadow: 0 0 0 3px rgba(76,130,255,0.2);
+}
+
+/* ---------------------------------------------------------
+   VIDEO
+--------------------------------------------------------- */
+video {
+  width: 100%;
+  min-height: 240px;
+
+  border-radius: 16px;
+  background: #000;
+  object-fit: cover;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+/* ---------------------------------------------------------
+   ESTADO
+--------------------------------------------------------- */
+.status {
+  width: 100%;
+  background: #eef1f6;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  color: #333;
+  font-weight: 600;
+  border: 1px solid #dce1e8;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------
+   BOTONES
+--------------------------------------------------------- */
+.btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 18px;
+  border-radius: 40px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.25s ease;
+}
+
+.btn-primary {
+  background: #4c82ff;
+  color: white;
+  box-shadow: 0 4px 14px rgba(76,130,255,0.35);
+}
+
+.btn-primary:hover {
+  background: #3a6ade;
+}
+
+.btn-danger {
+  background: #ff4d4d;
+  color: white;
+  box-shadow: 0 4px 14px rgba(255,77,77,0.35);
+}
+
+.btn-danger:hover {
+  background: #e13a3a;
+}
+
+/* ---------------------------------------------------------
+   RESPONSIVE (Para celulares)
+--------------------------------------------------------- */
+@media (max-width: 480px) {
+
+  .container {
+    width: 94%;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  video {
+    min-height: 220px;
+  }
+
+  header h1 {
+    font-size: 20px;
+  }
+}
