@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Transmisión – Sereno</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    text-align: center;
+  }
+  video {
+    width: 100%;
+    max-width: 380px;
+    border-radius: 12px;
+    background: #000;
+  }
+  button {
+    margin-top: 20px;
+    padding: 14px;
+    width: 90%;
+    border: none;
+    border-radius: 10px;
+    background: #007bff;
+    color: white;
+    font-size: 18px;
+  }
+</style>
+</head>
+
+<body>
+<h2>📡 Transmisión del Sereno</h2>
+<video id="localVideo" autoplay playsinline></video>
+<button id="btnStart">Iniciar transmisión</button>
+
+<script>
+let pc;
+let localStream;
+
+document.getElementById("btnStart").onclick = async () => {
+  document.getElementById("btnStart").innerText = "Conectando...";
+  
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+  document.getElementById("localVideo").srcObject = localStream;
+
+  pc = new RTCPeerConnection();
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.onicecandidate = e => {
+    if (e.candidate) return;
+
+    const offer = btoa(JSON.stringify(pc.localDescription));
+    window.location.href = "ver.html#"+offer;
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Panel – Ver Transmisión</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    text-align: center;
+  }
+  video {
+    width: 95%;
+    max-width: 700px;
+    border-radius: 14px;
+    background: black;
+  }
+</style>
+</head>
+
+<body>
+<h2>🎥 Transmisión desde el Sereno</h2>
+<video id="remoteVideo" autoplay playsinline></video>
+
+<script>
+const hash = window.location.hash.substring(1);
+if (!hash) {
+  alert("No se encontró oferta de conexión.");
+}
+
+let pc = new RTCPeerConnection();
+
+pc.ontrack = (e) => {
+  document.getElementById("remoteVideo").srcObject = e.streams[0];
+};
+
+(async () => {
+  const offer = JSON.parse(atob(hash));
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  pc.onicecandidate = e => {
+    if (!e.candidate) {
+      console.log("Conexión establecida.");
+    }
+  };
+})();
+</script>
+
+</body>
+</html>
