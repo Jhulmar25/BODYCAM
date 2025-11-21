@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>BodyCam – Sereno</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
     body {
       margin: 0;
@@ -48,12 +48,6 @@
       color: #d2d7e5;
     }
 
-    .label {
-      font-size: 13px;
-      color: #8e96aa;
-      margin-bottom: 4px;
-    }
-
     video {
       width: 100%;
       border-radius: 12px;
@@ -68,10 +62,6 @@
       color: #9fa7c0;
     }
 
-    .status span {
-      font-weight: 600;
-    }
-
     .btn {
       margin-top: 16px;
       width: 100%;
@@ -81,7 +71,6 @@
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: 0.2s;
     }
 
     .btn-primary {
@@ -103,56 +92,54 @@
 
   <div class="container">
     <div class="info-card">
-      <div class="label">Código de Sereno</div>
-      <input id="codigoInput" type="text" placeholder="Ej: S01" />
+      <div>Código del Sereno</div>
+      <input id="codigoInput" type="text" placeholder="S01" />
     </div>
 
     <video id="localVideo" autoplay playsinline muted></video>
 
-    <div class="status" id="statusText">
-      Estado: <span>Listo para transmitir</span>
+    <div class="status">
+      Estado: <span id="estadoText">Listo para transmitir</span>
     </div>
 
-    <button class="btn btn-primary" id="btnToggle">
-      Iniciar transmisión
-    </button>
+    <button class="btn btn-primary" id="btnToggle">Iniciar transmisión</button>
   </div>
 
-  <!-- Socket.IO CORRECTO -->
+  <!-- SOCKET.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
   <script>
     const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
 
     const pcConfig = {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-      ]
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     };
 
-    let socket, pc, localStream, roomId, transmitting = false;
+    let socket, pc, localStream, roomId;
+    let transmitting = false;
 
     const videoEl = document.getElementById("localVideo");
+    const estadoText = document.getElementById("estadoText");
     const btnToggle = document.getElementById("btnToggle");
-    const statusText = document.getElementById("statusText").querySelector("span");
-    const codigoInput = document.getElementById("codigoInput");
 
-    function setStatus(msg) {
-      statusText.textContent = msg;
+    function setEstado(msg) {
+      estadoText.textContent = msg;
       console.log(msg);
     }
 
     async function startTransmission() {
-      roomId = codigoInput.value.trim().toUpperCase();
-      if (!roomId) return alert("Escribe un código (Ej: S01)");
+      roomId = document.getElementById("codigoInput").value.trim().toUpperCase();
+      if (!roomId) return alert("Ingresa un código como S01");
 
       try {
-        setStatus("Solicitando cámara...");
+        setEstado("Permisos de cámara...");
 
+        // ⭐ UNIVERSAL (iOS + Android) — pedir SOLO cámara primero
         localStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-          audio: true,
+          video: {
+            facingMode: { ideal: "environment" }
+          },
+          audio: false
         });
 
         videoEl.srcObject = localStream;
@@ -160,9 +147,19 @@
         socket = io(SIGNALING_URL, { transports: ["websocket"] });
 
         socket.on("connect", () => {
-          setStatus("Conectado al servidor.");
+          setEstado("Conectado al servidor.");
           socket.emit("join-room", { roomId, role: "sender" });
         });
+
+        pc = new RTCPeerConnection(pcConfig);
+
+        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            socket.emit("ice-candidate", { roomId, candidate: e.candidate });
+          }
+        };
 
         socket.on("answer", async ({ answer }) => {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -172,33 +169,32 @@
           candidate && pc.addIceCandidate(new RTCIceCandidate(candidate));
         });
 
-        pc = new RTCPeerConnection(pcConfig);
-        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            socket.emit("ice-candidate", { roomId, candidate: e.candidate });
-          }
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "connected") {
-            setStatus("Transmitiendo en vivo.");
-          }
-        };
+        setEstado("Creando oferta...");
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
         socket.emit("offer", { roomId, offer });
 
+        // ⭐ Después de conectar, pedir audio (iOS lo permite después)
+        setTimeout(async () => {
+          try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream.getTracks().forEach(t => pc.addTrack(t, audioStream));
+          } catch (e) {
+            console.warn("Audio no permitido aún, pero video sí funciona.");
+          }
+        }, 1500);
+
         transmitting = true;
         btnToggle.textContent = "Detener transmisión";
         btnToggle.classList.remove("btn-primary");
         btnToggle.classList.add("btn-danger");
+
+        setEstado("Esperando visor...");
       } catch (err) {
         console.error(err);
-        setStatus("Error al iniciar.");
+        setEstado("Error iniciando cámara.");
       }
     }
 
@@ -206,17 +202,19 @@
       socket && socket.disconnect();
       pc && pc.close();
       localStream && localStream.getTracks().forEach(t => t.stop());
+
       videoEl.srcObject = null;
+
       transmitting = false;
-
       btnToggle.textContent = "Iniciar transmisión";
-      btnToggle.classList.remove("btn-danger");
       btnToggle.classList.add("btn-primary");
+      btnToggle.classList.remove("btn-danger");
 
-      setStatus("Transmisión detenida.");
+      setEstado("Transmisión detenida.");
     }
 
-    btnToggle.onclick = () => transmitting ? stopTransmission() : startTransmission();
+    btnToggle.onclick = () =>
+      transmitting ? stopTransmission() : startTransmission();
   </script>
 </body>
 </html>
