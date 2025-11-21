@@ -2,15 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>BodyCam – Panel Multivista</title>
+  <title>SISTEMA DE CONTROL DE TRANSMISIÓN</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="panel-styles.css" />
-  
 </head>
 
 <body>
   <header>
-    <h1>BodyCam – Panel Multivista (4 transmisiones)</h1>
+    <h1>SISTEMA DE CONTROL DE TRANSMISIÓN</h1>
   </header>
 
   <div class="container">
@@ -19,44 +18,60 @@
       <!-- CARD 1 -->
       <div class="card">
         <div class="controls">
-          <input id="code1" placeholder="Código S01" />
-          <button onclick="connect(1)">Ver</button>
-          <button class="stop" onclick="disconnect(1)">X</button>
+          <input id="code1" placeholder="Código de transmisión #1" />
+          <button onclick="connect(1)">Reproducir</button>
+          <button class="stop" onclick="disconnect(1)">Finalizar</button>
         </div>
-        <video id="video1" autoplay playsinline></video>
+
+        <div class="video-wrapper">
+          <video id="video1" autoplay playsinline></video>
+        </div>
+
         <div class="estado" id="estado1">Esperando…</div>
       </div>
 
       <!-- CARD 2 -->
       <div class="card">
         <div class="controls">
-          <input id="code2" placeholder="Código S02" />
-          <button onclick="connect(2)">Ver</button>
-          <button class="stop" onclick="disconnect(2)">X</button>
+          <input id="code2" placeholder="Código de transmisión #2" />
+          <button onclick="connect(2)">Reproducir</button>
+          <button class="stop" onclick="disconnect(2)">Finalizar</button>
         </div>
-        <video id="video2" autoplay playsinline></video>
+
+        <div class="video-wrapper">
+          <video id="video2" autoplay playsinline></video>
+        </div>
+
         <div class="estado" id="estado2">Esperando…</div>
       </div>
 
       <!-- CARD 3 -->
       <div class="card">
         <div class="controls">
-          <input id="code3" placeholder="Código S03" />
-          <button onclick="connect(3)">Ver</button>
-          <button class="stop" onclick="disconnect(3)">X</button>
+          <input id="code3" placeholder="Código de transmisión #3" />
+          <button onclick="connect(3)">Reproducir</button>
+          <button class="stop" onclick="disconnect(3)">Finalizar</button>
         </div>
-        <video id="video3" autoplay playsinline></video>
+
+        <div class="video-wrapper">
+          <video id="video3" autoplay playsinline></video>
+        </div>
+
         <div class="estado" id="estado3">Esperando…</div>
       </div>
 
       <!-- CARD 4 -->
       <div class="card">
         <div class="controls">
-          <input id="code4" placeholder="Código S04" />
-          <button onclick="connect(4)">Ver</button>
-          <button class="stop" onclick="disconnect(4)">X</button>
+          <input id="code4" placeholder="Código de transmisión #4" />
+          <button onclick="connect(4)">Reproducir</button>
+          <button class="stop" onclick="disconnect(4)">Finalizar</button>
         </div>
-        <video id="video4" autoplay playsinline></video>
+
+        <div class="video-wrapper">
+          <video id="video4" autoplay playsinline></video>
+        </div>
+
         <div class="estado" id="estado4">Esperando…</div>
       </div>
 
@@ -66,6 +81,9 @@
   <!-- SOCKET.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
+  <!-- ===========================
+       WEBCAM RECEIVER
+  ============================ -->
   <script>
     const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
 
@@ -136,5 +154,63 @@
       delete pcs[id];
     }
   </script>
+
+  <!-- ===========================
+       BOTONES FULLSCREEN
+  ============================ -->
+  <script>
+document.querySelectorAll(".card").forEach(card => {
+  const wrapper = card.querySelector(".video-wrapper");
+  const video = card.querySelector("video");
+
+  // ---- SIN SEÑAL ----
+  const noSignal = document.createElement("div");
+  noSignal.className = "no-signal";
+  noSignal.textContent = "Sin señal";
+  wrapper.appendChild(noSignal);
+
+  video.addEventListener("playing", () => noSignal.style.display = "none");
+  video.addEventListener("pause", () => noSignal.style.display = "flex");
+
+
+  // ---- BOTONES ----
+  const btnFull = document.createElement("div");
+  btnFull.className = "fullscreen-btn";
+  btnFull.textContent = "⛶";
+
+  const btnExit = document.createElement("div");
+  btnExit.className = "exit-btn";
+  btnExit.textContent = "⤢";
+
+  wrapper.appendChild(btnFull);
+  wrapper.appendChild(btnExit);
+
+  // ENTRAR A PANTALLA COMPLETA REAL
+  btnFull.onclick = async (e) => {
+    e.stopPropagation();
+    if (wrapper.requestFullscreen) await wrapper.requestFullscreen();
+    btnFull.style.display = "none";
+    btnExit.style.display = "block";
+  };
+
+  // SALIR
+  btnExit.onclick = async (e) => {
+    e.stopPropagation();
+    if (document.fullscreenElement) await document.exitFullscreen();
+    btnExit.style.display = "none";
+    btnFull.style.display = "block";
+  };
+
+  // Si sale con ESC o F11
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement) {
+      btnExit.style.display = "none";
+      btnFull.style.display = "block";
+    }
+  });
+
+});
+  </script>
+
 </body>
 </html>
