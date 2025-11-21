@@ -51,7 +51,7 @@
 
     async function startTransmission() {
       roomId = document.getElementById("codigoInput").value.trim().toUpperCase();
-      if (!roomId) return alert("Ingresa un código como S01");
+      if (!roomId) return alert("Ingresa un código para la transmisión");
 
       try {
         setEstado("Permisos de cámara...");
