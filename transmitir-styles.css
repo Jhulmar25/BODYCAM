@@ -10,7 +10,7 @@
 html, body {
   height: 100%;
   width: 100%;
-  overflow: hidden;  /* No scroll */
+  overflow: hidden;
   background: #f4f5f7;
   font-family: "Segoe UI", system-ui, sans-serif;
   color: #1f2532;
@@ -20,89 +20,84 @@ html, body {
 }
 
 /* ---------------------------------------------------------
-   HEADER FIJO
+   HEADER
 --------------------------------------------------------- */
 header {
-  flex: 0 0 auto;
-  width: 100%;
-  background: #ffffff;
   padding: 14px 0;
   text-align: center;
   font-size: 22px;
   font-weight: 700;
+  background: #ffffff;
   border-bottom: 1px solid #e4e4e4;
-
-  z-index: 10;
 }
 
 /* ---------------------------------------------------------
-   CUERPO PRINCIPAL ADAPTATIVO
+   CONTENEDOR
 --------------------------------------------------------- */
 .container {
-  flex: 1;                /* Ocupa TODO el espacio disponible */
-  width: 100%;
+  flex: 1;
   padding: 10px;
-
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
   align-items: center;
-
   gap: 10px;
   overflow: hidden;
 }
 
 /* ---------------------------------------------------------
-   TARJETA INPUT
+   TARJETA DE DATOS
 --------------------------------------------------------- */
 .info-card {
   width: 100%;
   max-width: 500px;
-
   background: #fff;
   border-radius: 14px;
-  padding: 12px 16px;
+  padding: 16px;
   border: 1px solid #e1e3e6;
 
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.info-card label {
+  font-weight: 600;
+  font-size: 15px;
 }
 
 .info-card input {
   padding: 12px;
-  font-size: 17px;
+  font-size: 16px;
   border-radius: 10px;
   border: 1px solid #ccc;
+  width: 100%;
 }
 
 /* ---------------------------------------------------------
-   VIDEO AUTO-AJUSTADO
+   VIDEO
 --------------------------------------------------------- */
 .video-area {
-  flex: 1;                 /* Usa SOLO el espacio disponible */
+  flex: 1;
   width: 100%;
   max-width: 500px;
-
   background: black;
   border-radius: 16px;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
 video {
   width: 100%;
   height: 100%;
-  object-fit: cover;       /* Se ajusta sin deformar */
+  object-fit: cover;
 }
 
 /* ---------------------------------------------------------
-   ESTADO + BOTONES (siempre visibles)
+   ESTADO
 --------------------------------------------------------- */
 .status {
   width: 100%;
   max-width: 500px;
-
   background: #eef1f6;
   padding: 12px;
   border-radius: 12px;
@@ -111,17 +106,18 @@ video {
   border: 1px solid #dce1e8;
 }
 
+/* ---------------------------------------------------------
+   BOTONES
+--------------------------------------------------------- */
 .btn {
   width: 100%;
   max-width: 500px;
-
   padding: 16px;
   font-size: 18px;
   border-radius: 40px;
   border: none;
   font-weight: 700;
   cursor: pointer;
-
   transition: 0.2s;
 }
 
@@ -130,7 +126,15 @@ video {
   color: white;
 }
 
+.btn-primary:hover {
+  background: #3b6ae0;
+}
+
 .btn-danger {
   background: #ff4d4d;
   color: white;
+}
+
+.btn-danger:hover {
+  background: #e63a3a;
 }
