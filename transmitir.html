@@ -15,23 +15,30 @@
 
   <div class="container">
 
-    <!-- INPUT DEL CÓDIGO -->
+    <!-- DATOS DEL SERENO -->
     <div class="info-card">
-      <label>Ingrese código</label>
+      <label for="codigoInput">Código de transmisión</label>
       <input id="codigoInput" type="text" placeholder="Ej: S01" />
+
+      <label for="nombreInput">Nombre completo</label>
+      <input id="nombreInput" type="text" placeholder="Nombres y apellidos" />
+
+      <label for="dniInput">DNI</label>
+      <input id="dniInput" type="text" placeholder="Ej: 12345678" />
     </div>
 
-    <!-- 🎥 AREA DEL VIDEO (ahora sí existe) -->
+    <!-- VIDEO LOCAL -->
     <div class="video-area">
       <video id="localVideo" autoplay playsinline muted></video>
     </div>
 
     <!-- ESTADO -->
     <div class="status">
-      Estado: <span id="estadoText">Listo para transmitir</span>
+      Estado: <span id="estadoText">Listo para transmitir</span><br />
+      <small id="gpsText">GPS: sin ubicación</small>
     </div>
 
-    <!-- BOTÓN -->
+    <!-- BOTÓN PRINCIPAL -->
     <button class="btn btn-primary" id="btnToggle">Iniciar transmisión</button>
 
   </div>
@@ -39,8 +46,16 @@
   <!-- SOCKET.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-  <!-- SCRIPT PRINCIPAL -->
-  <script>
+  <!-- SCRIPT PRINCIPAL (MÓDULO) -->
+  <script type="module">
+    import {
+      db,
+      collection,
+      addDoc,
+      updateDoc,
+      serverTimestamp
+    } from "./firebase-config.js";
+
     const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
 
     const pcConfig = {
@@ -50,28 +65,125 @@
     let socket, pc, localStream, roomId;
     let transmitting = false;
 
-    const videoEl = document.getElementById("localVideo");
-    const estadoText = document.getElementById("estadoText");
+    // Firestore: referencia al documento creado al iniciar
+    let currentDocRef = null;
+
+    // DOM
+    const videoEl   = document.getElementById("localVideo");
+    const estadoEl  = document.getElementById("estadoText");
+    const gpsEl     = document.getElementById("gpsText");
     const btnToggle = document.getElementById("btnToggle");
 
+    const codigoInput = document.getElementById("codigoInput");
+    const nombreInput = document.getElementById("nombreInput");
+    const dniInput    = document.getElementById("dniInput");
+
     function setEstado(msg) {
-      estadoText.textContent = msg;
+      estadoEl.textContent = msg;
+      console.log("[ESTADO]", msg);
+    }
+
+    function setGPS(msg) {
+      gpsEl.textContent = "GPS: " + msg;
+      console.log("[GPS]", msg);
+    }
+
+    // Helpers de fecha/hora
+    function getFechaYHora() {
+      const now = new Date();
+      const dia  = String(now.getDate()).padStart(2, "0");
+      const mes  = String(now.getMonth() + 1).padStart(2, "0");
+      const anio = now.getFullYear();
+      const horas   = String(now.getHours()).padStart(2, "0");
+      const minutos = String(now.getMinutes()).padStart(2, "0");
+
+      return {
+        fechaKey: `${dia}-${mes}-${anio}`,  // Para la colección
+        fechaTexto: `${dia}-${mes}-${anio}`,
+        horaTexto: `${horas}:${minutos}`
+      };
+    }
+
+    async function registrarInicioEnFirestore({ codigo, nombre, dni }) {
+      const { fechaKey, fechaTexto, horaTexto } = getFechaYHora();
+
+      let lat = null;
+      let lng = null;
+
+      // 1) Intentar obtener geolocalización
+      setGPS("obteniendo ubicación…");
+      try {
+        const pos = await new Promise((resolve, reject) => {
+          if (!navigator.geolocation) {
+            return reject(new Error("Geolocalización no soportada"));
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000
+          });
+        });
+
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        setGPS(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      } catch (err) {
+        console.warn("No se pudo obtener GPS:", err);
+        setGPS("no disponible");
+      }
+
+      // 2) Guardar en Firestore
+      const registrosRef = collection(db, "videos", fechaKey, "registros");
+
+      const payload = {
+        codigo,
+        nombre,
+        dni,
+        fecha: fechaTexto,   // "24-11-2025"
+        hora: horaTexto,     // "14:50"
+        lat,
+        lng,
+        activo: true,
+        creadoEn: serverTimestamp()
+      };
+
+      const docRef = await addDoc(registrosRef, payload);
+      console.log("📄 Registro creado en Firestore con ID:", docRef.id);
+      return docRef;
+    }
+
+    async function marcarFinEnFirestore() {
+      if (!currentDocRef) return;
+      try {
+        await updateDoc(currentDocRef, {
+          activo: false,
+          finalizadoEn: serverTimestamp()
+        });
+        console.log("✅ Transmisión marcada como finalizada en Firestore");
+      } catch (err) {
+        console.error("Error al actualizar documento:", err);
+      }
     }
 
     async function startTransmission() {
-      roomId = document.getElementById("codigoInput").value.trim().toUpperCase();
-      if (!roomId) return alert("Ingresa un código");
+      roomId = codigoInput.value.trim().toUpperCase();
+      const nombre = nombreInput.value.trim();
+      const dni    = dniInput.value.trim();
+
+      if (!roomId) return alert("Ingresa el código de transmisión");
+      if (!nombre) return alert("Ingresa el nombre del sereno");
+      if (!dni)    return alert("Ingresa el DNI");
 
       try {
         setEstado("Activando cámara...");
 
+        // Cámara
         localStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
           audio: false
         });
-
         videoEl.srcObject = localStream;
 
+        // WebSocket / Socket.IO
         socket = io(SIGNALING_URL, { transports: ["websocket"] });
 
         socket.on("connect", () => {
@@ -79,6 +191,7 @@
           socket.emit("join-room", { roomId, role: "sender" });
         });
 
+        // WebRTC
         pc = new RTCPeerConnection(pcConfig);
         localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
@@ -99,8 +212,15 @@
         setEstado("Creando oferta...");
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
         socket.emit("offer", { roomId, offer });
+
+        // Guardar en Firestore
+        setEstado("Registrando inicio en Firestore...");
+        currentDocRef = await registrarInicioEnFirestore({
+          codigo: roomId,
+          nombre,
+          dni
+        });
 
         transmitting = true;
         btnToggle.textContent = "Detener transmisión";
@@ -111,16 +231,21 @@
 
       } catch (err) {
         console.error(err);
-        setEstado("Error al activar cámara");
+        setEstado("Error al activar cámara / transmisión");
+        alert("Ocurrió un error al iniciar la transmisión.");
       }
     }
 
-    function stopTransmission() {
+    async function stopTransmission() {
+      // WebRTC / Socket
       socket && socket.disconnect();
       pc && pc.close();
       localStream && localStream.getTracks().forEach(t => t.stop());
-
       videoEl.srcObject = null;
+
+      // Firestore
+      await marcarFinEnFirestore();
+      currentDocRef = null;
 
       transmitting = false;
       btnToggle.textContent = "Iniciar transmisión";
