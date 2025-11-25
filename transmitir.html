@@ -46,7 +46,7 @@
   <!-- SOCKET.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-  <!-- SCRIPT PRINCIPAL (MÓDULO) -->
+  <!-- SCRIPT PRINCIPAL -->
   <script type="module">
     import {
       db,
@@ -56,19 +56,30 @@
       serverTimestamp
     } from "./firebase-config.js";
 
+    /*
+    ========================================================
+    CONFIG
+    ========================================================
+    */
     const SIGNALING_URL = "https://bodycam-server-200816039529.us-central1.run.app";
 
     const pcConfig = {
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     };
 
-    let socket, pc, localStream, roomId;
+    let socket = null;
+    let pc = null;
+    let localStream = null;
+    let roomId = null;
     let transmitting = false;
 
-    // Firestore: referencia al documento creado al iniciar
-    let currentDocRef = null;
+    let currentDocRef = null; // Firestore doc del registro
 
-    // DOM
+    /*
+    ========================================================
+    DOM
+    ========================================================
+    */
     const videoEl   = document.getElementById("localVideo");
     const estadoEl  = document.getElementById("estadoText");
     const gpsEl     = document.getElementById("gpsText");
@@ -77,6 +88,7 @@
     const codigoInput = document.getElementById("codigoInput");
     const nombreInput = document.getElementById("nombreInput");
     const dniInput    = document.getElementById("dniInput");
+
 
     function setEstado(msg) {
       estadoEl.textContent = msg;
@@ -88,163 +100,199 @@
       console.log("[GPS]", msg);
     }
 
-    // Helpers de fecha/hora
+    /*
+    ========================================================
+    🔵 FIRESTORE
+    ========================================================
+    */
+
     function getFechaYHora() {
       const now = new Date();
-      const dia  = String(now.getDate()).padStart(2, "0");
-      const mes  = String(now.getMonth() + 1).padStart(2, "0");
-      const anio = now.getFullYear();
-      const horas   = String(now.getHours()).padStart(2, "0");
-      const minutos = String(now.getMinutes()).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const y = now.getFullYear();
+      const h = String(now.getHours()).padStart(2, "0");
+      const min = String(now.getMinutes()).padStart(2, "0");
 
       return {
-        fechaKey: `${dia}-${mes}-${anio}`,  // Para la colección
-        fechaTexto: `${dia}-${mes}-${anio}`,
-        horaTexto: `${horas}:${minutos}`
+        fechaKey: `${d}-${m}-${y}`,
+        fechaTexto: `${d}-${m}-${y}`,
+        horaTexto: `${h}:${min}`
       };
     }
 
-    async function registrarInicioEnFirestore({ codigo, nombre, dni }) {
+    async function registrarInicio({ codigo, nombre, dni }) {
       const { fechaKey, fechaTexto, horaTexto } = getFechaYHora();
 
-      let lat = null;
-      let lng = null;
+      let lat = null, lng = null;
 
-      // 1) Intentar obtener geolocalización
       setGPS("obteniendo ubicación…");
+
       try {
         const pos = await new Promise((resolve, reject) => {
-          if (!navigator.geolocation) {
-            return reject(new Error("Geolocalización no soportada"));
-          }
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
-            timeout: 10000
+            timeout: 8000
           });
         });
 
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
         setGPS(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+
       } catch (err) {
-        console.warn("No se pudo obtener GPS:", err);
         setGPS("no disponible");
       }
 
-      // 2) Guardar en Firestore
-      const registrosRef = collection(db, "videos", fechaKey, "registros");
+      const colRef = collection(db, "videos", fechaKey, "registros");
 
       const payload = {
         codigo,
         nombre,
         dni,
-        fecha: fechaTexto,   // "24-11-2025"
-        hora: horaTexto,     // "14:50"
+        fecha: fechaTexto,
+        hora: horaTexto,
         lat,
         lng,
         activo: true,
         creadoEn: serverTimestamp()
       };
 
-      const docRef = await addDoc(registrosRef, payload);
-      console.log("📄 Registro creado en Firestore con ID:", docRef.id);
+      const docRef = await addDoc(colRef, payload);
+      console.log("🔥 Doc creado:", docRef.id);
       return docRef;
     }
 
-    async function marcarFinEnFirestore() {
+    async function marcarFin() {
       if (!currentDocRef) return;
-      try {
-        await updateDoc(currentDocRef, {
-          activo: false,
-          finalizadoEn: serverTimestamp()
-        });
-        console.log("✅ Transmisión marcada como finalizada en Firestore");
-      } catch (err) {
-        console.error("Error al actualizar documento:", err);
-      }
+      await updateDoc(currentDocRef, {
+        activo: false,
+        finalizadoEn: serverTimestamp()
+      });
+      console.log("📌 Marcado como finalizado");
     }
 
-    async function startTransmission() {
+    /*
+    ========================================================
+    🔵 WEBRTC + SOCKET.IO
+    ========================================================
+    */
+
+    function prepararSocket() {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+
+      socket = io(SIGNALING_URL, { transports: ["websocket"] });
+
+      socket.on("connect", () => {
+        console.log("🔗 Socket conectado");
+        socket.emit("join-room", { roomId, role: "sender" });
+      });
+
+      socket.on("answer", async ({ answer }) => {
+        console.log("⬅️ ANSWER recibida");
+        if (pc.signalingState !== "closed") {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+      });
+
+      socket.on("ice-candidate", ({ candidate }) => {
+        if (candidate && pc) {
+          pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      });
+
+      socket.on("user-joined", () => {
+        console.log("👁 Visor se conectó → reenviando offer");
+        reenviarOferta();
+      });
+    }
+
+    async function crearPeerConnection() {
+      pc = new RTCPeerConnection(pcConfig);
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit("ice-candidate", {
+            roomId,
+            candidate: e.candidate
+          });
+        }
+      };
+
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    }
+
+    async function reenviarOferta() {
+      if (!pc) return;
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit("offer", { roomId, offer });
+      console.log("➡️ OFFER reenviada");
+      setEstado("Conectando visor…");
+    }
+
+    /*
+    ========================================================
+    🔵 CONTROLES PRINCIPALES
+    ========================================================
+    */
+
+    async function start() {
       roomId = codigoInput.value.trim().toUpperCase();
       const nombre = nombreInput.value.trim();
       const dni    = dniInput.value.trim();
 
-      if (!roomId) return alert("Ingresa el código de transmisión");
-      if (!nombre) return alert("Ingresa el nombre del sereno");
+      if (!roomId) return alert("Ingresa el código");
+      if (!nombre) return alert("Ingresa el nombre");
       if (!dni)    return alert("Ingresa el DNI");
 
       try {
         setEstado("Activando cámara...");
 
-        // Cámara
         localStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
           audio: false
         });
+
         videoEl.srcObject = localStream;
 
-        // WebSocket / Socket.IO
-        socket = io(SIGNALING_URL, { transports: ["websocket"] });
+        prepararSocket();
+        await crearPeerConnection();
+        await reenviarOferta();
 
-        socket.on("connect", () => {
-          setEstado("Conectado al servidor");
-          socket.emit("join-room", { roomId, role: "sender" });
-        });
+        setEstado("Registrando en Firestore…");
 
-        // WebRTC
-        pc = new RTCPeerConnection(pcConfig);
-        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            socket.emit("ice-candidate", { roomId, candidate: e.candidate });
-          }
-        };
-
-        socket.on("answer", async ({ answer }) => {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        });
-
-        socket.on("ice-candidate", async ({ candidate }) => {
-          candidate && pc.addIceCandidate(new RTCIceCandidate(candidate));
-        });
-
-        setEstado("Creando oferta...");
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit("offer", { roomId, offer });
-
-        // Guardar en Firestore
-        setEstado("Registrando inicio en Firestore...");
-        currentDocRef = await registrarInicioEnFirestore({
-          codigo: roomId,
-          nombre,
-          dni
-        });
+        currentDocRef = await registrarInicio({ codigo: roomId, nombre, dni });
 
         transmitting = true;
         btnToggle.textContent = "Detener transmisión";
         btnToggle.classList.remove("btn-primary");
         btnToggle.classList.add("btn-danger");
 
-        setEstado("Esperando visor...");
+        setEstado("Esperando visor…");
 
       } catch (err) {
-        console.error(err);
-        setEstado("Error al activar cámara / transmisión");
-        alert("Ocurrió un error al iniciar la transmisión.");
+        console.error("ERROR:", err);
+        alert("Error iniciando transmisión");
       }
     }
 
-    async function stopTransmission() {
-      // WebRTC / Socket
-      socket && socket.disconnect();
-      pc && pc.close();
-      localStream && localStream.getTracks().forEach(t => t.stop());
+    async function stop() {
+      if (socket) socket.disconnect();
+      if (pc) pc.close();
+
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
+
       videoEl.srcObject = null;
 
-      // Firestore
-      await marcarFinEnFirestore();
+      await marcarFin();
       currentDocRef = null;
 
       transmitting = false;
@@ -255,7 +303,8 @@
       setEstado("Transmisión detenida");
     }
 
-    btnToggle.onclick = () => transmitting ? stopTransmission() : startTransmission();
+    btnToggle.onclick = () => transmitting ? stop() : start();
+
   </script>
 
 </body>
