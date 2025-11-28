@@ -17,14 +17,13 @@
 
     <!-- DATOS DEL SERENO -->
     <div class="info-card">
-      <label for="codigoInput">Código de transmisión</label>
-      <input id="codigoInput" type="text" placeholder="Ej: S01" />
+      <label for="codigoInput">Ingrese su DNI: </label>
+      <input id="codigoInput" type="text" placeholder="Ej: 12345678" />
 
-      <label for="nombreInput">Nombre completo</label>
+      <label for="nombreInput">Nombre completo: </label>
       <input id="nombreInput" type="text" placeholder="Nombres y apellidos" />
 
-      <label for="dniInput">DNI</label>
-      <input id="dniInput" type="text" placeholder="Ej: 12345678" />
+      
     </div>
 
     <!-- VIDEO LOCAL -->
@@ -87,7 +86,8 @@
 
     const codigoInput = document.getElementById("codigoInput");
     const nombreInput = document.getElementById("nombreInput");
-    const dniInput    = document.getElementById("dniInput");
+   
+    
 
 
     function setEstado(msg) {
@@ -121,7 +121,7 @@
       };
     }
 
-    async function registrarInicio({ codigo, nombre, dni }) {
+    async function registrarInicio({ codigo, nombre }) {
       const { fechaKey, fechaTexto, horaTexto } = getFechaYHora();
 
       let lat = null, lng = null;
@@ -149,7 +149,7 @@
       const payload = {
         codigo,
         nombre,
-        dni,
+        
         fecha: fechaTexto,
         hora: horaTexto,
         lat,
@@ -208,6 +208,12 @@
         console.log("👁 Visor se conectó → reenviando offer");
         reenviarOferta();
       });
+      // 🛑 DETENER TRANSMISIÓN CUANDO LA WEB LO ORDENA
+      socket.on("detener-desde-web", () => {
+        console.log("🛑 Orden recibida desde la web → deteniendo transmisión");
+        stop();
+      });
+
     }
 
     async function crearPeerConnection() {
@@ -245,11 +251,11 @@
     async function start() {
       roomId = codigoInput.value.trim().toUpperCase();
       const nombre = nombreInput.value.trim();
-      const dni    = dniInput.value.trim();
+      
 
       if (!roomId) return alert("Ingresa el código");
       if (!nombre) return alert("Ingresa el nombre");
-      if (!dni)    return alert("Ingresa el DNI");
+      
 
       try {
         setEstado("Activando cámara...");
@@ -267,7 +273,7 @@
 
         setEstado("Registrando en Firestore…");
 
-        currentDocRef = await registrarInicio({ codigo: roomId, nombre, dni });
+        currentDocRef = await registrarInicio({ codigo: roomId, nombre });
 
         transmitting = true;
         btnToggle.textContent = "Detener transmisión";
