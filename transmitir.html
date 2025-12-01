@@ -262,8 +262,9 @@
 
         localStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
-          audio: false
+          audio: true
         });
+
 
         videoEl.srcObject = localStream;
 
@@ -315,3 +316,4 @@
 
 </body>
 </html>
+
